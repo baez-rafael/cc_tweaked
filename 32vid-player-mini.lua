@@ -135,122 +135,127 @@ local start = os.epoch "utc"
 local lastyield = start
 local vframe = 0
 local subs = {}
-term.clear()
-for _ = 1, nframes do
-    local size, ftype = ("<IB"):unpack(file.read(5))
-    --print(size, ftype, file.seek())
-    if ftype == 0 then
-        if os.epoch "utc" - lastyield > 3000 then sleep(0) lastyield = os.epoch "utc" end
-        local dcstart = os.epoch "utc"
-        --print("init screen", vframe, file.seek())
-        init(false)
-        --print("read screen", vframe, file.seek())
-        local screen = read(width * height)
-        --print("init colors", vframe, file.seek())
-        init(true)
-        --print("read bg colors", vframe)
-        local bg = read(width * height)
-        --print("read fg colors", vframe)
-        local fg = read(width * height)
-        local dctime = os.epoch "utc" - dcstart
-        while os.epoch "utc" < start + vframe * 1000 / fps do end
-        local texta, fga, bga = {}, {}, {}
-        for y = 0, height - 1 do
-            local text, fgs, bgs = "", "", ""
-            for x = 1, width do
-                text = text .. string.char(128 + screen[y*width+x])
-                fgs = fgs .. blitColors[fg[y*width+x]]
-                bgs = bgs .. blitColors[bg[y*width+x]]
-            end
-            texta[y+1], fga[y+1], bga[y+1] = text, fgs, bgs
-        end
-        for i = 0, 15 do term.setPaletteColor(2^i, file.read() / 255, file.read() / 255, file.read() / 255) end
-        for y = 1, height do
-            term.setCursorPos(1, y)
-            term.blit(texta[y], fga[y], bga[y])
-        end
-        local delete = {}
-        for i, v in ipairs(subs) do
-            if vframe <= v.frame + v.length then
-                term.setCursorPos(v.x, v.y)
-                term.setBackgroundColor(v.bgColor)
-                term.setTextColor(v.fgColor)
-                term.write(v.text)
-            else delete[#delete+1] = i end
-        end
-        for i, v in ipairs(delete) do table.remove(subs, v - i + 1) end
-        --term.setCursorPos(1, height + 1)
-        --term.clearLine()
-        --print("Frame decode time:", dctime, "ms")
-        vframe = vframe + 1
-    elseif ftype == 1 then
-        local audio = file.read(size)
-        if speaker then
-            if bit32_band(flags, 12) == 0 then
-                local chunk = {audio:byte(1, -1)}
-                for i = 1, #chunk do chunk[i] = chunk[i] - 128 end
-                speaker.playAudio(chunk)
-            else
-                speaker.playAudio(dfpwm.decode(audio))
-            end
-        end
-    elseif ftype == 8 then
-        local data = file.read(size)
-        local sub = {}
-        sub.frame, sub.length, sub.x, sub.y, sub.color, sub.flags, sub.text = ("<IIHHBBs2"):unpack(data)
-        sub.bgColor, sub.fgColor = 2^bit32_rshift(sub.color, 4), 2^bit32_band(sub.color, 15)
-        subs[#subs+1] = sub
-    elseif ftype >= 0x40 and ftype < 0x80 then
-        if ftype == 64 then vframe = vframe + 1 end
-        local mx, my = bit32_band(bit32_rshift(ftype, 3), 7) + 1, bit32_band(ftype, 7) + 1
-        --print("(" .. mx .. ", " .. my .. ")")
-        local term = monitors[my][mx]
-        if os.epoch "utc" - lastyield > 3000 then sleep(0) lastyield = os.epoch "utc" end
-        local width, height = ("<HH"):unpack(file.read(4))
-        local dcstart = os.epoch "utc"
-        --print("init screen", vframe, file.seek())
-        init(false)
-        --print("read screen", vframe, file.seek())
-        local screen = read(width * height)
-        --print("init colors", vframe, file.seek())
-        init(true)
-        --print("read bg colors", vframe)
-        local bg = read(width * height)
-        --print("read fg colors", vframe)
-        local fg = read(width * height)
-        local dctime = os.epoch "utc" - dcstart
-        while os.epoch "utc" < start + vframe * 1000 / fps do end
-        local texta, fga, bga = {}, {}, {}
-        for y = 0, height - 1 do
-            local text, fgs, bgs = "", "", ""
-            for x = 1, width do
-                text = text .. string.char(128 + screen[y*width+x])
-                fgs = fgs .. blitColors[fg[y*width+x]]
-                bgs = bgs .. blitColors[bg[y*width+x]]
-            end
-            texta[y+1], fga[y+1], bga[y+1] = text, fgs, bgs
-        end
-        for i = 0, 15 do term.setPaletteColor(2^i, file.read() / 255, file.read() / 255, file.read() / 255) end
-        for y = 1, height do
-            term.setCursorPos(1, y)
-            term.blit(texta[y], fga[y], bga[y])
-        end
-        --[[local delete = {}
-        for i, v in ipairs(subs) do
-            if vframe <= v.frame + v.length then
-                term.setCursorPos(v.x, v.y)
-                term.setBackgroundColor(v.bgColor)
-                term.setTextColor(v.fgColor)
-                term.write(v.text)
-            else delete[#delete+1] = i end
-        end
-        for i, v in ipairs(delete) do table.remove(subs, v - i + 1) end]]
-        --term.setCursorPos(1, height + 1)
-        --term.clearLine()
-        --print("Frame decode time:", dctime, "ms")
-    else file.close() error("Unknown frame type " .. ftype) end
-end
 
+local beginVid = file.seek()
+while true do
+    file = file.seek("set", beginVid)
+    sleep(2)
+    term.clear()
+    for _ = 1, nframes do
+        local size, ftype = ("<IB"):unpack(file.read(5))
+        --print(size, ftype, file.seek())
+        if ftype == 0 then
+            if os.epoch "utc" - lastyield > 3000 then sleep(0) lastyield = os.epoch "utc" end
+            local dcstart = os.epoch "utc"
+            --print("init screen", vframe, file.seek())
+            init(false)
+            --print("read screen", vframe, file.seek())
+            local screen = read(width * height)
+            --print("init colors", vframe, file.seek())
+            init(true)
+            --print("read bg colors", vframe)
+            local bg = read(width * height)
+            --print("read fg colors", vframe)
+            local fg = read(width * height)
+            local dctime = os.epoch "utc" - dcstart
+            while os.epoch "utc" < start + vframe * 1000 / fps do end
+            local texta, fga, bga = {}, {}, {}
+            for y = 0, height - 1 do
+                local text, fgs, bgs = "", "", ""
+                for x = 1, width do
+                    text = text .. string.char(128 + screen[y*width+x])
+                    fgs = fgs .. blitColors[fg[y*width+x]]
+                    bgs = bgs .. blitColors[bg[y*width+x]]
+                end
+                texta[y+1], fga[y+1], bga[y+1] = text, fgs, bgs
+            end
+            for i = 0, 15 do term.setPaletteColor(2^i, file.read() / 255, file.read() / 255, file.read() / 255) end
+            for y = 1, height do
+                term.setCursorPos(1, y)
+                term.blit(texta[y], fga[y], bga[y])
+            end
+            local delete = {}
+            for i, v in ipairs(subs) do
+                if vframe <= v.frame + v.length then
+                    term.setCursorPos(v.x, v.y)
+                    term.setBackgroundColor(v.bgColor)
+                    term.setTextColor(v.fgColor)
+                    term.write(v.text)
+                else delete[#delete+1] = i end
+            end
+            for i, v in ipairs(delete) do table.remove(subs, v - i + 1) end
+            --term.setCursorPos(1, height + 1)
+            --term.clearLine()
+            --print("Frame decode time:", dctime, "ms")
+            vframe = vframe + 1
+        elseif ftype == 1 then
+            local audio = file.read(size)
+            if speaker then
+                if bit32_band(flags, 12) == 0 then
+                    local chunk = {audio:byte(1, -1)}
+                    for i = 1, #chunk do chunk[i] = chunk[i] - 128 end
+                    speaker.playAudio(chunk)
+                else
+                    speaker.playAudio(dfpwm.decode(audio))
+                end
+            end
+        elseif ftype == 8 then
+            local data = file.read(size)
+            local sub = {}
+            sub.frame, sub.length, sub.x, sub.y, sub.color, sub.flags, sub.text = ("<IIHHBBs2"):unpack(data)
+            sub.bgColor, sub.fgColor = 2^bit32_rshift(sub.color, 4), 2^bit32_band(sub.color, 15)
+            subs[#subs+1] = sub
+        elseif ftype >= 0x40 and ftype < 0x80 then
+            if ftype == 64 then vframe = vframe + 1 end
+            local mx, my = bit32_band(bit32_rshift(ftype, 3), 7) + 1, bit32_band(ftype, 7) + 1
+            --print("(" .. mx .. ", " .. my .. ")")
+            local term = monitors[my][mx]
+            if os.epoch "utc" - lastyield > 3000 then sleep(0) lastyield = os.epoch "utc" end
+            local width, height = ("<HH"):unpack(file.read(4))
+            local dcstart = os.epoch "utc"
+            --print("init screen", vframe, file.seek())
+            init(false)
+            --print("read screen", vframe, file.seek())
+            local screen = read(width * height)
+            --print("init colors", vframe, file.seek())
+            init(true)
+            --print("read bg colors", vframe)
+            local bg = read(width * height)
+            --print("read fg colors", vframe)
+            local fg = read(width * height)
+            local dctime = os.epoch "utc" - dcstart
+            while os.epoch "utc" < start + vframe * 1000 / fps do end
+            local texta, fga, bga = {}, {}, {}
+            for y = 0, height - 1 do
+                local text, fgs, bgs = "", "", ""
+                for x = 1, width do
+                    text = text .. string.char(128 + screen[y*width+x])
+                    fgs = fgs .. blitColors[fg[y*width+x]]
+                    bgs = bgs .. blitColors[bg[y*width+x]]
+                end
+                texta[y+1], fga[y+1], bga[y+1] = text, fgs, bgs
+            end
+            for i = 0, 15 do term.setPaletteColor(2^i, file.read() / 255, file.read() / 255, file.read() / 255) end
+            for y = 1, height do
+                term.setCursorPos(1, y)
+                term.blit(texta[y], fga[y], bga[y])
+            end
+            --[[local delete = {}
+            for i, v in ipairs(subs) do
+                if vframe <= v.frame + v.length then
+                    term.setCursorPos(v.x, v.y)
+                    term.setBackgroundColor(v.bgColor)
+                    term.setTextColor(v.fgColor)
+                    term.write(v.text)
+                else delete[#delete+1] = i end
+            end
+            for i, v in ipairs(delete) do table.remove(subs, v - i + 1) end]]
+            --term.setCursorPos(1, height + 1)
+            --term.clearLine()
+            --print("Frame decode time:", dctime, "ms")
+        else file.close() error("Unknown frame type " .. ftype) end
+    end
+end
 for i = 0, 15 do term.setPaletteColor(2^i, term.nativePaletteColor(2^i)) end
 term.setBackgroundColor(colors.black)
 term.setTextColor(colors.white)
