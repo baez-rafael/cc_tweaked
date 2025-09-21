@@ -138,7 +138,7 @@ local subs = {}
 
 local beginVid = file.seek()
 while true do
-    file = file.seek("set", beginVid)
+    file.seek("set", beginVid)
     sleep(2)
     term.clear()
     for _ = 1, nframes do
